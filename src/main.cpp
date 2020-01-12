@@ -127,11 +127,10 @@ main()
       };
 
       // setup CSR-storage
+      std::vector<unsigned int> c_pool_row_lid_to_gid;
       std::vector<unsigned int> c_pool_row{0};
       std::vector<unsigned int> c_pool_col;
       std::vector<Number>       c_pool_val;
-
-      std::vector<unsigned int> lid_to_gid;
 
       for (unsigned int j = 0; j < dof_handler.n_dofs(); ++j)
         {
@@ -139,7 +138,7 @@ main()
           if (constraints.size() == 0)
             continue;
 
-          lid_to_gid.emplace_back(j);
+          c_pool_row_lid_to_gid.emplace_back(j);
 
           for (const auto &constraint : constraints)
             {
@@ -149,18 +148,24 @@ main()
           c_pool_row.emplace_back(c_pool_col.size());
         }
 
-      std::vector<Number> diagonal_local_constrained(lid_to_gid.size());
+      // local storage: buffer so that we access the global vector once
+      // note: may be larger then dofs_per_cell in the presence of constraints!
+      std::vector<Number> diagonal_local_constrained(
+        c_pool_row_lid_to_gid.size(), Number(0.0));
 
+      // loop over all columns of element stiffness matrix
       for (unsigned int i = 0; i < dofs_per_cell; ++i)
         {
-          // compute i-th column of element stiffness matrix
+          // compute i-th column of element stiffness matrix:
+          // this could be simply performed as done at the moment with
+          // matrix-free operator evaluation applied to a ith-basis vector
           const auto ith_column = compute_ith_column_of_matrix(i);
 
-          // apply local constraint matrix from left and from right
-          //
+          // apply local constraint matrix from left and from right:
+          // loop over all rows of transposed constrained matrix
           for (unsigned int j = 0; j < c_pool_row.size() - 1; j++)
             {
-              // check if the result will zero, so that we can skipp the
+              // check if the result will be zero, so that we can skip the
               // following computations
               const auto scale_iterator =
                 std::find(c_pool_col.begin() + c_pool_row[j],
@@ -182,8 +187,10 @@ main()
             }
         }
 
+      // assembly results: add into global vector
       for (unsigned int j = 0; j < c_pool_row.size() - 1; j++)
-        diagonal_global[lid_to_gid[j]] += diagonal_local_constrained[j];
+        diagonal_global[c_pool_row_lid_to_gid[j]] +=
+          diagonal_local_constrained[j];
     }
 
   diagonal_global.print(std::cout);
