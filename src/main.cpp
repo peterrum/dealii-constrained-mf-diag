@@ -88,8 +88,6 @@ main()
       std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
       cell->get_dof_indices(local_dof_indices);
 
-      std::vector<Number> diagonal_local(dofs_per_cell);
-
       auto get_constraint_vector = [&](const unsigned int i) {
         std::vector<std::pair<unsigned int, Number>> v;
 
@@ -128,16 +126,21 @@ main()
         return v;
       };
 
-      std::vector<
-        std::pair<unsigned int, std::vector<std::pair<unsigned int, Number>>>>
-        constraint_matrix;
+      std::vector<std::vector<std::pair<unsigned int, Number>>>
+                                constraint_matrix;
+      std::vector<unsigned int> lid_to_gid;
 
       for (unsigned int j = 0; j < dof_handler.n_dofs(); ++j)
         {
           auto constraints = get_constraint_vector(j);
-          if (constraints.size() > 0)
-            constraint_matrix.emplace_back(j, constraints);
+          if (constraints.size() == 0)
+            continue;
+
+          lid_to_gid.emplace_back(j);
+          constraint_matrix.emplace_back(constraints);
         }
+
+      std::vector<Number> diagonal_local(lid_to_gid.size());
 
       for (unsigned int i = 0; i < dofs_per_cell; ++i)
         {
@@ -145,27 +148,32 @@ main()
           auto column = get_matrix_column(i);
 
           // apply local constraint matrix from left and right
-          for (const auto &constraints : constraint_matrix)
+          for (unsigned int j = 0; j < constraint_matrix.size(); j++)
             {
+              const auto &constraints = constraint_matrix[j];
+
               // check if the result will zero, so that we can skipp the
               // following computations
               const auto scale =
-                std::find_if(constraints.second.begin(),
-                             constraints.second.end(),
+                std::find_if(constraints.begin(),
+                             constraints.end(),
                              [i](const auto &a) { return a.first == i; });
 
-              if (scale == constraints.second.end())
+              if (scale == constraints.end())
                 continue;
 
               // apply constraint matrix from the left
               Number temp = 0.0;
-              for (auto constraint : constraints.second)
+              for (auto constraint : constraints)
                 temp += constraint.second * column[constraint.first];
 
               // apply constraint matrix from the right
-              diagonal_global[constraints.first] += temp * scale->second;
+              diagonal_local[j] += temp * scale->second;
             }
         }
+
+      for (unsigned int j = 0; j < constraint_matrix.size(); j++)
+        diagonal_global[lid_to_gid[j]] += diagonal_local[j];
     }
 
   diagonal_global.print(std::cout);
