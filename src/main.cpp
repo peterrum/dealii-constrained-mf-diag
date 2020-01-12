@@ -126,8 +126,11 @@ main()
         return v;
       };
 
-      std::vector<std::vector<std::pair<unsigned int, Number>>>
-                                constraint_matrix;
+      // setup CSR-storage
+      std::vector<unsigned int> c_pool_row{0};
+      std::vector<unsigned int> c_pool_col;
+      std::vector<Number>       c_pool_val;
+
       std::vector<unsigned int> lid_to_gid;
 
       for (unsigned int j = 0; j < dof_handler.n_dofs(); ++j)
@@ -137,7 +140,13 @@ main()
             continue;
 
           lid_to_gid.emplace_back(j);
-          constraint_matrix.emplace_back(constraints);
+
+          for (const auto &constraint : constraints)
+            {
+              c_pool_col.emplace_back(constraint.first);
+              c_pool_val.emplace_back(constraint.second);
+            }
+          c_pool_row.emplace_back(c_pool_col.size());
         }
 
       std::vector<Number> diagonal_local_constrained(lid_to_gid.size());
@@ -147,32 +156,33 @@ main()
           // compute i-th column of element stiffness matrix
           const auto ith_column = compute_ith_column_of_matrix(i);
 
-          // apply local constraint matrix from left and right
-          for (unsigned int j = 0; j < constraint_matrix.size(); j++)
+          // apply local constraint matrix from left and from right
+          //
+          for (unsigned int j = 0; j < c_pool_row.size() - 1; j++)
             {
-              const auto &constraints = constraint_matrix[j];
-
               // check if the result will zero, so that we can skipp the
               // following computations
-              const auto scale =
-                std::find_if(constraints.begin(),
-                             constraints.end(),
-                             [i](const auto &a) { return a.first == i; });
+              const auto scale_iterator =
+                std::find(c_pool_col.begin() + c_pool_row[j],
+                          c_pool_col.begin() + c_pool_row[j + 1],
+                          i);
 
-              if (scale == constraints.end())
+              if (scale_iterator == c_pool_col.begin() + c_pool_row[j + 1])
                 continue;
 
               // apply constraint matrix from the left
               Number temp = 0.0;
-              for (auto constraint : constraints)
-                temp += constraint.second * ith_column[constraint.first];
+              for (unsigned int k = c_pool_row[j]; k < c_pool_row[j + 1]; k++)
+                temp += c_pool_val[k] * ith_column[c_pool_col[k]];
 
               // apply constraint matrix from the right
-              diagonal_local_constrained[j] += temp * scale->second;
+              diagonal_local_constrained[j] +=
+                temp *
+                c_pool_val[std::distance(c_pool_col.begin(), scale_iterator)];
             }
         }
 
-      for (unsigned int j = 0; j < constraint_matrix.size(); j++)
+      for (unsigned int j = 0; j < c_pool_row.size() - 1; j++)
         diagonal_global[lid_to_gid[j]] += diagonal_local_constrained[j];
     }
 
