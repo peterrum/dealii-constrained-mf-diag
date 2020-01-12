@@ -117,7 +117,7 @@ main()
         return v;
       };
 
-      auto get_matrix_column = [&](unsigned int col) {
+      auto compute_ith_column_of_matrix = [&](unsigned int col) {
         Vector<Number> v(dofs_per_cell);
 
         for (unsigned int j = 0; j < dofs_per_cell; ++j)
@@ -140,12 +140,12 @@ main()
           constraint_matrix.emplace_back(constraints);
         }
 
-      std::vector<Number> diagonal_local(lid_to_gid.size());
+      std::vector<Number> diagonal_local_constrained(lid_to_gid.size());
 
       for (unsigned int i = 0; i < dofs_per_cell; ++i)
         {
           // compute i-th column of element stiffness matrix
-          auto column = get_matrix_column(i);
+          const auto ith_column = compute_ith_column_of_matrix(i);
 
           // apply local constraint matrix from left and right
           for (unsigned int j = 0; j < constraint_matrix.size(); j++)
@@ -165,15 +165,15 @@ main()
               // apply constraint matrix from the left
               Number temp = 0.0;
               for (auto constraint : constraints)
-                temp += constraint.second * column[constraint.first];
+                temp += constraint.second * ith_column[constraint.first];
 
               // apply constraint matrix from the right
-              diagonal_local[j] += temp * scale->second;
+              diagonal_local_constrained[j] += temp * scale->second;
             }
         }
 
       for (unsigned int j = 0; j < constraint_matrix.size(); j++)
-        diagonal_global[lid_to_gid[j]] += diagonal_local[j];
+        diagonal_global[lid_to_gid[j]] += diagonal_local_constrained[j];
     }
 
   diagonal_global.print(std::cout);
