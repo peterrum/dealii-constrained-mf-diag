@@ -128,28 +128,42 @@ main()
         return v;
       };
 
+      std::vector<
+        std::pair<unsigned int, std::vector<std::pair<unsigned int, Number>>>>
+        constraint_matrix;
+
+      for (unsigned int j = 0; j < dof_handler.n_dofs(); ++j)
+        {
+          auto constraints = get_constraint_vector(j);
+          if (constraints.size() > 0)
+            constraint_matrix.emplace_back(j, constraints);
+        }
+
       for (unsigned int i = 0; i < dofs_per_cell; ++i)
         {
           // compute i-th column of element stiffness matrix
           auto column = get_matrix_column(i);
 
           // apply local constraint matrix from left and right
-          for (unsigned int j = 0; j < dof_handler.n_dofs(); ++j)
+          for (const auto &constraints : constraint_matrix)
             {
-              auto constraints = get_constraint_vector(j);
-
+              // check if the result will zero, so that we can skipp the
+              // following computations
               const auto scale =
-                std::find_if(constraints.begin(),
-                             constraints.end(),
+                std::find_if(constraints.second.begin(),
+                             constraints.second.end(),
                              [i](const auto &a) { return a.first == i; });
 
-              if (scale == constraints.end())
+              if (scale == constraints.second.end())
                 continue;
 
+              // apply constraint matrix from the left
               Number temp = 0.0;
-              for (auto constraint : constraints)
+              for (auto constraint : constraints.second)
                 temp += constraint.second * column[constraint.first];
-              diagonal_global[j] += temp * scale->second;
+
+              // apply constraint matrix from the right
+              diagonal_global[constraints.first] += temp * scale->second;
             }
         }
     }
