@@ -87,7 +87,7 @@ int main()
       
       auto get_constraint_vector= [&](const unsigned int i)
       {
-        Vector<Number> v(dofs_per_cell);
+        std::vector<std::pair<unsigned int, Number>> v;
         
         if(constraint.is_constrained(i))
             return v;
@@ -96,7 +96,7 @@ int main()
         
         for(unsigned int j = 0; j < dofs_per_cell; ++j)
           if(i==local_dof_indices[j])
-            v[j] = 1.0;
+            v.emplace_back(j, 1.0);
           
         for (unsigned int j = 0; j < dofs_per_cell; ++j)
         {
@@ -104,8 +104,10 @@ int main()
               continue;
             for (auto c : *constraint.get_constraint_entries(local_dof_indices[j]))
                 if (c.first == i)
-                  v[j] += c.second;
+                  v.emplace_back(j, c.second);
         }
+            
+            std::sort(v.begin(), v.end(), [](const auto & a, const auto & b) {return a.first < b.first;});
         
         return v;
       };
@@ -122,15 +124,23 @@ int main()
       
       for (unsigned int i = 0; i < dofs_per_cell; ++i)
       {
+          // compute i-th column of element stiffness matrix
           auto column = get_matrix_column(i);
           
+          // apply local constraint matrix from left and right
           for (unsigned int j = 0; j < dof_handler.n_dofs(); ++j)
           {
-              auto consts  = get_constraint_vector(j);
+              auto constraints  = get_constraint_vector(j);
+            
+              const auto scale = std::find_if(constraints.begin(), constraints.end(), [i](const auto & a){return a.first == i;});
+              
+              if (scale == constraints.end())
+                  continue;
+              
               Number temp = 0.0;
-              for (unsigned int j = 0; j < dofs_per_cell; ++j)
-                  temp += consts[j]*column[j];
-              diagonal_global[j] += temp * consts(i); 
+              for (auto constraint : constraints)
+                  temp += constraint.second * column[constraint.first];
+              diagonal_global[j] += temp * scale->second; 
           }
       }
     }
