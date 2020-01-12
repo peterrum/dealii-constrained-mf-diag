@@ -133,43 +133,6 @@ int main()
               diagonal_global[j] += temp * consts(i); 
           }
       }
-      
-//      for (unsigned int i = 0; i < dofs_per_cell; ++i)
-//      {
-//        if(constraint.is_constrained(local_dof_indices[i]))
-//            continue;
-//        
-//        std::vector<Number> temp(dofs_per_cell);
-//        
-//        diagonal_local[i] = cell_matrix(i,i);
-//          
-//        for (unsigned int j = 0; j < dofs_per_cell; ++j)
-//        {
-//            if(i==j)
-//              continue;
-//            if (!constraint.is_constrained(local_dof_indices[j]))
-//              continue;
-//            for (auto c : *constraint.get_constraint_entries(local_dof_indices[j]))
-//                if (c.first == local_dof_indices[i])
-//                  temp[j] += cell_matrix(j,i) * c.second;
-//        }
-//        
-//        for (unsigned int j = 0; j < dofs_per_cell; ++j)
-//        {
-//            if(i==j)
-//              continue;
-//            if (!constraint.is_constrained(local_dof_indices[j]))
-//              continue;
-//            for (auto c : *constraint.get_constraint_entries(local_dof_indices[j]))
-//                if (c.first == local_dof_indices[i])
-//                  diagonal_local[i] += temp[j] * c.second;
-//        }
-//      }
-          
-      //for (unsigned int i = 0; i < dofs_per_cell; ++i)
-      //  diagonal_global(local_dof_indices[i]) += diagonal_local[i];
-      
-      
     }
   
   diagonal_global.print(std::cout);
