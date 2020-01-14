@@ -97,7 +97,7 @@ main()
         return v;
       };
 
-      std::vector<std::tuple<unsigned int, unsigned int, Number, unsigned int>>
+      std::vector<std::tuple<unsigned int, unsigned int, Number>>
         locally_relevant_dof_indices;
 
       for (unsigned int i = 0; i < local_dof_indices.size(); i++)
@@ -106,20 +106,16 @@ main()
 
           if (!constraint.is_constrained(local_dof_index))
             {
-              locally_relevant_dof_indices.emplace_back(local_dof_index,
+              locally_relevant_dof_indices.emplace_back(i,
                                                         local_dof_index,
-                                                        1.0,
-                                                        i);
+                                                        1.0);
               continue;
             }
 
           for (const auto &c :
                *constraint.get_constraint_entries(local_dof_index))
             if (!constraint.is_constrained(c.first))
-              locally_relevant_dof_indices.emplace_back(local_dof_index,
-                                                        c.first,
-                                                        c.second,
-                                                        i);
+              locally_relevant_dof_indices.emplace_back(i, c.first, c.second);
         }
 
       std::sort(locally_relevant_dof_indices.begin(),
@@ -128,7 +124,7 @@ main()
                   if (std::get<1>(a) < std::get<1>(b))
                     return true;
                   return (std::get<1>(a) == std::get<1>(b)) &&
-                         (std::get<3>(a) < std::get<3>(b));
+                         (std::get<0>(a) < std::get<0>(b));
                 });
 
       locally_relevant_dof_indices.erase(
@@ -136,7 +132,7 @@ main()
                locally_relevant_dof_indices.end(),
                [](const auto &a, const auto &b) {
                  return (std::get<1>(a) == std::get<1>(b)) &&
-                        (std::get<3>(a) == std::get<3>(b));
+                        (std::get<0>(a) == std::get<0>(b));
                }),
         locally_relevant_dof_indices.end());
 
@@ -158,7 +154,7 @@ main()
                 c_pool_row.push_back(c_pool_val.size());
               }
 
-            c_pool_col.emplace_back(std::get<3>(j));
+            c_pool_col.emplace_back(std::get<0>(j));
             c_pool_val.emplace_back(std::get<2>(j));
           }
 
