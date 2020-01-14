@@ -164,12 +164,6 @@ main()
                }),
         locally_relevant_dof_indices.end());
 
-      // setup CSR-storage
-      std::vector<unsigned int> c_pool_row_lid_to_gid;
-      std::vector<unsigned int> c_pool_row{0};
-      std::vector<unsigned int> c_pool_col;
-      std::vector<Number>       c_pool_val;
-
       std::vector<unsigned int> c_pool_row_lid_to_gid_;
       if (locally_relevant_dof_indices.size() > 0)
         c_pool_row_lid_to_gid_.emplace_back(
@@ -180,9 +174,11 @@ main()
           c_pool_row_lid_to_gid_.emplace_back(std::get<1>(i));
 
 
-      for (const auto &j : c_pool_row_lid_to_gid_)
-        std::cout << j << " ";
-      std::cout << std::endl;
+      // setup CSR-storage
+      std::vector<unsigned int> c_pool_row_lid_to_gid;
+      std::vector<unsigned int> c_pool_row{0};
+      std::vector<unsigned int> c_pool_col;
+      std::vector<Number>       c_pool_val;
 
       for (const auto &j : c_pool_row_lid_to_gid_)
         {
