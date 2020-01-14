@@ -126,26 +126,42 @@ main()
         return v;
       };
 
-      std::vector<unsigned int> locally_relevant_dof_indices;
+      std::vector<std::tuple<unsigned int, unsigned int, Number>>
+        locally_relevant_dof_indices;
 
       for (const auto &local_dof_index : local_dof_indices)
         {
           if (!constraint.is_constrained(local_dof_index))
             {
-              locally_relevant_dof_indices.emplace_back(local_dof_index);
+              locally_relevant_dof_indices.emplace_back(local_dof_index,
+                                                        local_dof_index,
+                                                        1.0);
               continue;
             }
 
           for (const auto &c :
                *constraint.get_constraint_entries(local_dof_index))
-            locally_relevant_dof_indices.emplace_back(c.first);
+            locally_relevant_dof_indices.emplace_back(local_dof_index,
+                                                      c.first,
+                                                      c.second);
         }
 
       std::sort(locally_relevant_dof_indices.begin(),
-                locally_relevant_dof_indices.end());
+                locally_relevant_dof_indices.end(),
+                [](const auto &a, const auto &b) {
+                  if (std::get<1>(a) < std::get<1>(b))
+                    return true;
+                  return (std::get<1>(a) == std::get<1>(b)) &&
+                         (std::get<0>(a) < std::get<0>(b));
+                });
+
       locally_relevant_dof_indices.erase(
         unique(locally_relevant_dof_indices.begin(),
-               locally_relevant_dof_indices.end()),
+               locally_relevant_dof_indices.end(),
+               [](const auto &a, const auto &b) {
+                 return (std::get<1>(a) == std::get<1>(b)) &&
+                        (std::get<0>(a) == std::get<0>(b));
+               }),
         locally_relevant_dof_indices.end());
 
       // setup CSR-storage
@@ -154,7 +170,21 @@ main()
       std::vector<unsigned int> c_pool_col;
       std::vector<Number>       c_pool_val;
 
-      for (const auto &j : locally_relevant_dof_indices)
+      std::vector<unsigned int> c_pool_row_lid_to_gid_;
+      if (locally_relevant_dof_indices.size() > 0)
+        c_pool_row_lid_to_gid_.emplace_back(
+          std::get<1>(locally_relevant_dof_indices.front()));
+
+      for (const auto &i : locally_relevant_dof_indices)
+        if (std::get<1>(i) != c_pool_row_lid_to_gid_.back())
+          c_pool_row_lid_to_gid_.emplace_back(std::get<1>(i));
+
+
+      for (const auto &j : c_pool_row_lid_to_gid_)
+        std::cout << j << " ";
+      std::cout << std::endl;
+
+      for (const auto &j : c_pool_row_lid_to_gid_)
         {
           auto constraints = get_constraint_vector(j);
           if (constraints.size() == 0)
