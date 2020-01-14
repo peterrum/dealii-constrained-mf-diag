@@ -97,56 +97,71 @@ main()
         return v;
       };
 
+      /*************************************************************************
+       * STEP 1: extract locally relevant constraints  -> locally relevant
+       *         constraint matrix; we can extract this information easily
+       *         from DoFInfo and MatrixFree::constraint_pool
+       ************************************************************************/
       std::vector<std::tuple<unsigned int, unsigned int, Number>>
-        locally_relevant_dof_indices;
+        locally_relevant_constrains; // (constrained local index, global index
+                                     // of dof which constrains, weight)
 
-      for (unsigned int i = 0; i < local_dof_indices.size(); i++)
-        {
-          const auto &local_dof_index = local_dof_indices[i];
+      {
+        // loop over all constraints relevant for the degrees of freedom of
+        // the given cell
+        for (unsigned int i = 0; i < local_dof_indices.size(); i++)
+          {
+            const auto &local_dof_index = local_dof_indices[i];
 
-          if (!constraint.is_constrained(local_dof_index))
-            {
-              locally_relevant_dof_indices.emplace_back(i,
-                                                        local_dof_index,
-                                                        1.0);
-              continue;
-            }
+            if (!constraint.is_constrained(local_dof_index))
+              {
+                locally_relevant_constrains.emplace_back(i,
+                                                         local_dof_index,
+                                                         1.0);
+                continue;
+              }
 
-          for (const auto &c :
-               *constraint.get_constraint_entries(local_dof_index))
-            if (!constraint.is_constrained(c.first))
-              locally_relevant_dof_indices.emplace_back(i, c.first, c.second);
-        }
+            for (const auto &c :
+                 *constraint.get_constraint_entries(local_dof_index))
+              if (!constraint.is_constrained(c.first))
+                locally_relevant_constrains.emplace_back(i, c.first, c.second);
+          }
 
-      std::sort(locally_relevant_dof_indices.begin(),
-                locally_relevant_dof_indices.end(),
-                [](const auto &a, const auto &b) {
-                  if (std::get<1>(a) < std::get<1>(b))
-                    return true;
-                  return (std::get<1>(a) == std::get<1>(b)) &&
-                         (std::get<0>(a) < std::get<0>(b));
-                });
+        // presort vector for transposed access
+        std::sort(locally_relevant_constrains.begin(),
+                  locally_relevant_constrains.end(),
+                  [](const auto &a, const auto &b) {
+                    if (std::get<1>(a) < std::get<1>(b))
+                      return true;
+                    return (std::get<1>(a) == std::get<1>(b)) &&
+                           (std::get<0>(a) < std::get<0>(b));
+                  });
 
-      locally_relevant_dof_indices.erase(
-        unique(locally_relevant_dof_indices.begin(),
-               locally_relevant_dof_indices.end(),
-               [](const auto &a, const auto &b) {
-                 return (std::get<1>(a) == std::get<1>(b)) &&
-                        (std::get<0>(a) == std::get<0>(b));
-               }),
-        locally_relevant_dof_indices.end());
+        // make sure that all entries are unique
+        locally_relevant_constrains.erase(
+          unique(locally_relevant_constrains.begin(),
+                 locally_relevant_constrains.end(),
+                 [](const auto &a, const auto &b) {
+                   return (std::get<1>(a) == std::get<1>(b)) &&
+                          (std::get<0>(a) == std::get<0>(b));
+                 }),
+          locally_relevant_constrains.end());
+      }
 
-      // setup CSR-storage
+      /*************************************************************************
+       * STEP 2: setup CSR storage of transposed locally relevant constraint
+       *         matrix
+       ************************************************************************/
       std::vector<unsigned int> c_pool_row_lid_to_gid;
       std::vector<unsigned int> c_pool_row{0};
       std::vector<unsigned int> c_pool_col;
       std::vector<Number>       c_pool_val;
 
       {
-        if (locally_relevant_dof_indices.size() > 0)
+        if (locally_relevant_constrains.size() > 0)
           c_pool_row_lid_to_gid.emplace_back(
-            std::get<1>(locally_relevant_dof_indices.front()));
-        for (const auto &j : locally_relevant_dof_indices)
+            std::get<1>(locally_relevant_constrains.front()));
+        for (const auto &j : locally_relevant_constrains)
           {
             if (c_pool_row_lid_to_gid.back() != std::get<1>(j))
               {
@@ -161,6 +176,10 @@ main()
         if (c_pool_val.size() > 0)
           c_pool_row.push_back(c_pool_val.size());
       }
+
+      /*************************************************************************
+       * STEP 3: compute element matrix element-by-element and apply constraints
+       ************************************************************************/
 
       // local storage: buffer so that we access the global vector once
       // note: may be larger then dofs_per_cell in the presence of constraints!
