@@ -166,13 +166,16 @@ main()
           for (unsigned int j = 0; j < c_pool_row.size() - 1; j++)
             {
               // check if the result will be zero, so that we can skip the
-              // following computations
+              // following computations -> binary search
               const auto scale_iterator =
-                std::find(c_pool_col.begin() + c_pool_row[j],
-                          c_pool_col.begin() + c_pool_row[j + 1],
-                          i);
+                std::lower_bound(c_pool_col.begin() + c_pool_row[j],
+                                 c_pool_col.begin() + c_pool_row[j + 1],
+                                 i);
 
               if (scale_iterator == c_pool_col.begin() + c_pool_row[j + 1])
+                continue;
+
+              if (*scale_iterator != i)
                 continue;
 
               // apply constraint matrix from the left
