@@ -126,13 +126,35 @@ main()
         return v;
       };
 
+      std::vector<unsigned int> locally_relevant_dof_indices;
+
+      for (const auto &local_dof_index : local_dof_indices)
+        {
+          if (!constraint.is_constrained(local_dof_index))
+            {
+              locally_relevant_dof_indices.emplace_back(local_dof_index);
+              continue;
+            }
+
+          for (const auto &c :
+               *constraint.get_constraint_entries(local_dof_index))
+            locally_relevant_dof_indices.emplace_back(c.first);
+        }
+
+      std::sort(locally_relevant_dof_indices.begin(),
+                locally_relevant_dof_indices.end());
+      locally_relevant_dof_indices.erase(
+        unique(locally_relevant_dof_indices.begin(),
+               locally_relevant_dof_indices.end()),
+        locally_relevant_dof_indices.end());
+
       // setup CSR-storage
       std::vector<unsigned int> c_pool_row_lid_to_gid;
       std::vector<unsigned int> c_pool_row{0};
       std::vector<unsigned int> c_pool_col;
       std::vector<Number>       c_pool_val;
 
-      for (unsigned int j = 0; j < dof_handler.n_dofs(); ++j)
+      for (const auto &j : locally_relevant_dof_indices)
         {
           auto constraints = get_constraint_vector(j);
           if (constraints.size() == 0)
